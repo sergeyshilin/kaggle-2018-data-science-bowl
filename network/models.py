@@ -1,8 +1,6 @@
 from keras.models import Sequential, Model
-from keras.layers import Conv2D, MaxPooling2D, Dense, Dropout, Input, Flatten, Add, GlobalMaxPooling2D
-from keras.layers import Concatenate, concatenate
-from keras.layers import Activation, LeakyReLU
-from keras.layers.normalization import BatchNormalization
+from keras.layers import Input, concatenate, Conv2D, MaxPooling2D
+from keras.layers import Activation, UpSampling2D, BatchNormalization
 from keras.optimizers import Adam, RMSprop, SGD, Adadelta
 
 from losses import bce_dice_loss, dice_loss, dice_coeff, mean_iou
