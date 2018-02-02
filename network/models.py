@@ -5,7 +5,8 @@ from keras.layers import Activation, LeakyReLU
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import Adam, RMSprop, SGD, Adadelta
 
-from losses import bce_dice_loss, dice_loss, weighted_bce_dice_loss, weighted_dice_loss, dice_coeff
+from losses import bce_dice_loss, dice_loss, dice_coeff, mean_iou
+from losses import weighted_bce_dice_loss, weighted_dice_loss
 
 
 def uNet_256(input_shape=(256, 256, 3), num_classes=1):
@@ -134,7 +135,7 @@ def uNet_256(input_shape=(256, 256, 3), num_classes=1):
 
     model = Model(inputs=inputs, outputs=classify)
 
-    model.compile(optimizer=RMSprop(lr=0.0001), loss=bce_dice_loss, metrics=[dice_coeff])
+    model.compile(optimizer=RMSprop(lr=0.0001), loss=bce_dice_loss, metrics=[mean_iou])
 
     return model
 
