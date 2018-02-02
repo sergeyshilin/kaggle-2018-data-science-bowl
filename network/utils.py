@@ -85,9 +85,9 @@ class DataPreprocessing:
 def get_best_history(history, monitor='val_loss', mode='min'):
     best_iteration = np.argmax(history[monitor]) if mode == 'max' else np.argmin(history[monitor])
     loss = history['loss'][best_iteration]
-    acc = history['acc'][best_iteration]
+    acc = history['mean_iou'][best_iteration]
     val_loss = history['val_loss'][best_iteration]
-    val_acc = history['val_acc'][best_iteration]
+    val_acc = history['val_mean_iou'][best_iteration]
 
     return best_iteration + 1, loss, acc, val_loss, val_acc
 
