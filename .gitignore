@@ -2,6 +2,7 @@
 *.csv
 *.json
 *.hdf5
+data/**/
 preview/
 preview_test/
 .DS_Store
