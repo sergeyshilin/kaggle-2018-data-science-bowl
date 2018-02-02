@@ -1,1 +1,1 @@
-# kaggle-statoil-iceberg-classifier-challenge
+# Kaggle 2018 Data Science Bowl
