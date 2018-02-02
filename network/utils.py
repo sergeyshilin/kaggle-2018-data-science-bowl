@@ -10,7 +10,7 @@ __all__ = ['DataPreprocessing']
 
 
 def get_data_train(data_path, img_size):
-    train_ids = next(os.walk(data_path))[1]
+    train_ids = np.asarray(next(os.walk(data_path))[1])
     sizes_train = []
 
     X_train = np.zeros((len(train_ids), img_size, img_size, 3), dtype=np.uint8)
@@ -35,7 +35,7 @@ def get_data_train(data_path, img_size):
 
 
 def get_data_test(data_path, img_size):
-    test_ids = next(os.walk(data_path))[1]
+    test_ids = np.asarray(next(os.walk(data_path))[1])
     X_test = np.zeros((len(test_ids), img_size, img_size, 3), dtype=np.uint8)
     sizes_test = []
 

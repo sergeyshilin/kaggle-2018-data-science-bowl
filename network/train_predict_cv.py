@@ -103,7 +103,7 @@ with open(best_model_path, "w") as json_file:
 
 
 def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
-    train_generator, val_generator = generator(xtr, xcv, ytr, ycv, batch_size)
+    train_generator, val_generator = generator(xtr, xcv, ytr, ycv)
 
     hist = model.fit_generator(
         train_generator,
@@ -141,18 +141,16 @@ def predict_with_tta(model, X_data, verbose=0):
 
 
 ## ========================= RUN KERAS K-FOLD TRAINING ========================= ##
-predictions = np.zeros((num_folds, len(X_test)))
-cv_labels = np.zeros((len(X_train)), dtype=np.uint8)
-cv_preds = np.zeros((len(X_train)), dtype=np.float32)
+predictions = np.zeros((num_folds, len(X_test), model_input_size, model_input_size, 1))
+cv_labels = np.zeros((len(X_train), model_input_size, model_input_size, 1), dtype=np.uint8)
+cv_preds = np.zeros((len(X_train), model_input_size, model_input_size, 1), dtype=np.float32)
 tr_labels, tr_preds = [], []
 
 skf = KFold(n_splits=num_folds, random_state=random_seed, shuffle=True)
 for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
     print ('\n===================FOLD=', j + 1)
     xtr, ytr = X_train[train_index], y_train[train_index]
-    xtr_sizes = train_sizes[train_index]
     xcv, ycv = X_train[cv_index], y_train[cv_index]
-    xcv_sizes = xcv[cv_index]
 
     tr_labels.extend(ytr)
     cv_labels[cv_index] = ycv
@@ -161,11 +159,11 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
 
     for lr in params.learning_rates:
         model_lr = None
-        model_lr = params.model_factory(input_shape=X_train.shape[1:], inputs_meta=M_train.shape[1])
+        model_lr = params.model_factory(input_shape=X_train.shape[1:])
         model_lr.load_weights(filepath=init_weights)
         K.set_value(model_lr.optimizer.lr, lr)
 
-        val_loss = train_and_evaluate_model(model_lr, [xtr, mtr], ytr, [xcv, mcv], ycv)
+        val_loss = train_and_evaluate_model(model_lr, xtr, ytr, xcv, ycv)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
@@ -173,7 +171,7 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
             model_lr.save_weights(filepath=best_weights_path)
 
     # Load the best model over all learning rates
-    best_model = params.model_factory(input_shape=X_train.shape[1:], inputs_meta=M_train.shape[1])
+    best_model = params.model_factory(input_shape=X_train.shape[1:])
     best_model.load_weights(filepath=best_weights_path)
 
     # Measure train and validation quality
