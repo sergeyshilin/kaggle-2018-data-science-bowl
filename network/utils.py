@@ -36,6 +36,7 @@ def get_data_train(data_path, img_size):
 
 def get_data_test(data_path, img_size):
     test_ids = next(os.walk(data_path))[1]
+    X_test = np.zeros((len(test_ids), img_size, img_size, 3), dtype=np.uint8)
     sizes_test = []
 
     for i, id_ in enumerate(test_ids):
