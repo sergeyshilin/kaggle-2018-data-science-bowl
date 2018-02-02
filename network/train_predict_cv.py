@@ -8,12 +8,12 @@ import numpy as np
 import pandas as pd
 
 import params
-from utils import get_data, get_best_history
-from utils import get_data_generator, get_data_generator_test
-from utils import get_object_size, get_stats, resize_data
+from utils import get_data_train, get_data_test, get_best_history
+from utils import get_predictions_upsampled, get_submit_data
+from losses import bce_dice_loss, mean_iou
 
 from sklearn.model_selection import train_test_split
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold
 from sklearn.metrics import log_loss, accuracy_score
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from keras.preprocessing.image import ImageDataGenerator
@@ -26,6 +26,7 @@ batch_size = params.batch_size
 best_weights_path = params.best_weights_path
 best_weights_checkpoint = params.best_weights_checkpoint
 best_model_path = params.best_model_path
+init_weights = params.init_weights_path
 random_seed = params.seed
 num_folds = params.num_folds
 tta_steps = params.tta_steps
@@ -33,7 +34,6 @@ model_input_size = params.model_input_size
 transform_data = params.data_adapt
 pseudolabeling = params.pseudolabeling
 
-init_weights = 'weights/init_weights.hdf5'
 
 ## Augmentation parameters
 aug_horizontal_flip = params.aug_horizontal_flip
@@ -47,40 +47,8 @@ aug_zoom = params.aug_zoom
 ### LOAD PARAMETERS
 
 
-train = pd.read_json('../data/train.json')
-test = pd.read_json('../data/test.json')
-
-train.loc[train['inc_angle'] == "na", 'inc_angle'] = 0
-
-train['size_1'] = train['band_1'].apply(get_object_size)
-test['size_1'] = test['band_1'].apply(get_object_size)
-
-train = get_stats(train)
-test = get_stats(test)
-
-test_pseudo = test[test['is_iceberg'] != -1]
-print("Pseudo labelled rows added: ",  test_pseudo.shape[0])
-
-if pseudolabeling:
-    train = pd.concat([train, test_pseudo], ignore_index=True)
-
-# Get prepared data based on band_1, band_2 and meta information
-X_train, M_train = get_data(train.band_1.values, train.band_2.values, 
-    train.inc_angle.values, train.size_1.values)#, train.min_1.values,
-#    train.max_1.values, train.med_1.values, train.mean_1.values,
-#    train.max_2.values)
-X_test, M_test = get_data(test.band_1.values, test.band_2.values,
-    test.inc_angle.values, test.size_1.values)#, test.min_1.values,
-#    test.max_1.values, test.med_1.values, test.mean_1.values,
-#    test.max_2.values)
-
-X_train = transform_data(X_train)
-X_test = transform_data(X_test)
-y_train = train['is_iceberg']
-
-if X_train.shape[1:] != model_input_size:
-    X_train = resize_data(X_train, model_input_size)
-    X_test = resize_data(X_test, model_input_size)
+X_train, y_train, train_ids, train_sizes = get_data_train('../data/train/', model_input_size)
+X_test, test_ids, test_sizes = get_data_test('../data/test/', model_input_size)
 
 
 def get_callbacks():
@@ -93,7 +61,7 @@ def get_callbacks():
     ]
 
 
-datagen = ImageDataGenerator(
+datagen_args = dict(
     horizontal_flip=aug_horizontal_flip,
     vertical_flip=aug_vertical_flip,
     rotation_range=aug_rotation,
@@ -105,7 +73,28 @@ datagen = ImageDataGenerator(
 )
 
 
-model_info = params.model_factory(input_shape=X_train.shape[1:], inputs_meta=M_train.shape[1])
+def generator(xtr, xval, ytr, yval):
+    image_datagen = ImageDataGenerator(**datagen_args)
+    mask_datagen = ImageDataGenerator(**datagen_args)
+    image_datagen.fit(xtr, seed=random_seed)
+    mask_datagen.fit(ytr, seed=random_seed)
+    image_generator = image_datagen.flow(xtr, batch_size=batch_size, seed=random_seed)
+    mask_generator = mask_datagen.flow(ytr, batch_size=batch_size, seed=random_seed)
+    train_generator = zip(image_generator, mask_generator)
+
+    val_gen_args = dict()
+    image_datagen_val = ImageDataGenerator(**val_gen_args)
+    mask_datagen_val = ImageDataGenerator(**val_gen_args)
+    image_datagen_val.fit(xval, seed=random_seed)
+    mask_datagen_val.fit(yval, seed=random_seed)
+    image_generator_val = image_datagen_val.flow(xval, batch_size=batch_size, seed=random_seed)
+    mask_generator_val = mask_datagen_val.flow(yval, batch_size=batch_size, seed=random_seed)
+    val_generator = zip(image_generator_val, mask_generator_val)
+
+    return train_generator, val_generator
+
+
+model_info = params.model_factory(input_shape=X_train.shape[1:])
 model_info.summary()
 model_info.save_weights(filepath=init_weights)
 
@@ -113,16 +102,15 @@ with open(best_model_path, "w") as json_file:
     json_file.write(model_info.to_json())
 
 
-def train_and_evaluate_model(model, X_tr, y_tr, X_cv, y_cv):
-    xtr, mtr = X_tr
-    xcv, mcv = X_cv
+def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
+    train_generator, val_generator = generator(xtr, xcv, ytr, ycv, batch_size)
 
     hist = model.fit_generator(
-        get_data_generator(datagen, xtr, mtr, ytr, batch_size=batch_size),
+        train_generator,
         steps_per_epoch=np.ceil(float(len(xtr)) / float(batch_size)),
         epochs=epochs,
         verbose=2,
-        validation_data=get_data_generator(datagen, xcv, mcv, ycv, batch_size=batch_size),
+        validation_data=val_generator,
         validation_steps=np.ceil(float(len(xcv)) / float(batch_size)),
         callbacks=get_callbacks()
     )
@@ -134,9 +122,10 @@ def train_and_evaluate_model(model, X_tr, y_tr, X_cv, y_cv):
     print ()
     return val_loss
 
-def predict_with_tta(model, X_data, M_data, verbose=0):
+
+def predict_with_tta(model, X_data, verbose=0):
     predictions = np.zeros((tta_steps, len(X_data)))
-    test_probas = model.predict([X_data, M_data], batch_size=batch_size, verbose=verbose)
+    test_probas = model.predict(X_data, batch_size=batch_size, verbose=verbose)
     predictions[0] = test_probas.reshape(test_probas.shape[0])
 
     for i in range(1, tta_steps):
@@ -147,7 +136,8 @@ def predict_with_tta(model, X_data, M_data, verbose=0):
         )
         predictions[i] = test_probas.reshape(test_probas.shape[0])
 
-    return predictions.mean(axis=0)
+    predictions = predictions.mean(axis=0)
+    return predictions
 
 
 ## ========================= RUN KERAS K-FOLD TRAINING ========================= ##
@@ -156,11 +146,13 @@ cv_labels = np.zeros((len(X_train)), dtype=np.uint8)
 cv_preds = np.zeros((len(X_train)), dtype=np.float32)
 tr_labels, tr_preds = [], []
 
-skf = StratifiedKFold(n_splits=num_folds, random_state=random_seed, shuffle=True)
+skf = KFold(n_splits=num_folds, random_state=random_seed, shuffle=True)
 for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
     print ('\n===================FOLD=', j + 1)
-    xtr, mtr, ytr = X_train[train_index], M_train[train_index], y_train[train_index]
-    xcv, mcv, ycv = X_train[cv_index], M_train[cv_index], y_train[cv_index]
+    xtr, ytr = X_train[train_index], y_train[train_index]
+    xtr_sizes = train_sizes[train_index]
+    xcv, ycv = X_train[cv_index], y_train[cv_index]
+    xcv_sizes = xcv[cv_index]
 
     tr_labels.extend(ytr)
     cv_labels[cv_index] = ycv
@@ -186,17 +178,17 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
 
     # Measure train and validation quality
     print ('\nValidating accuracy on training data ...')
-    tr_preds.extend(predict_with_tta(best_model, xtr, mtr))
-    cv_preds[cv_index] = predict_with_tta(best_model, xcv, mcv)
+    tr_preds.extend(predict_with_tta(best_model, xtr))
+    cv_preds[cv_index] = predict_with_tta(best_model, xcv)
 
     print ('\nPredicting test data with augmentation ...')
-    fold_predictions = predict_with_tta(best_model, X_test, M_test, verbose=1)
+    fold_predictions = predict_with_tta(best_model, X_test, verbose=1)
     predictions[j] = fold_predictions
 
-tr_loss = log_loss(tr_labels, tr_preds)
-tr_acc = accuracy_score(tr_labels, np.asarray(tr_preds) > 0.5)
-val_loss = log_loss(cv_labels, cv_preds)
-val_acc = accuracy_score(cv_labels, cv_preds > 0.5)
+tr_loss = bce_dice_loss(tr_labels, tr_preds)
+tr_acc = mean_iou(tr_labels, tr_preds)
+val_loss = bce_dice_loss(cv_labels, cv_preds)
+val_acc = mean_iou(cv_labels, cv_preds)
 
 print ()
 print ("Overall score: ")
@@ -204,22 +196,26 @@ print ("train_loss: {:0.6f} - train_acc: {:0.4f} - val_loss: {:0.6f} - val_acc: 
     tr_loss, tr_acc, val_loss, val_acc))
 print ()
 
-
 ## ========================= MAKE CV AND LB SUBMITS ========================= ##
-with open('../submit_id', 'r') as submit_id:
+with open('submit_id', 'r') as submit_id:
     last_submit_id = int(submit_id.read())
 
 last_submit_id += 1
 
-submission_cv = pd.DataFrame()
-submission_cv['preds'] = cv_preds
-submission_cv['is_iceberg'] = cv_labels
-submission_cv.to_csv('../submits_cv/submission_cv_{0:0>3}.csv'.format(last_submit_id), index=False)
+# submission_cv = pd.DataFrame()
+# submission_cv['preds'] = get_preds_upsampled(cv_preds, train_sizes)
+# submission_cv['is_iceberg'] = cv_labels
+# submission_cv.to_csv('../submits_cv/submission_cv_{0:0>3}.csv'.format(last_submit_id), index=False)
+
+new_test_ids, test_rles = get_submit_data(
+    get_predictions_upsampled(predictions.mean(axis=0), test_sizes),
+    test_ids
+)
 
 submission = pd.DataFrame()
-submission['id'] = test['id']
-submission['is_iceberg'] = predictions.mean(axis=0)
+submission['ImageId'] = new_test_ids
+submission['EncodedPixels'] = pd.Series(rles).apply(lambda x: ' '.join(str(y) for y in x))
 submission.to_csv('../submits/submission_{0:0>3}.csv'.format(last_submit_id), index=False)
 
-with open('../submit_id', 'w') as submit_id:
+with open('submit_id', 'w') as submit_id:
     submit_id.write(str(last_submit_id))
