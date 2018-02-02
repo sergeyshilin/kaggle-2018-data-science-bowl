@@ -1,3 +1,5 @@
+import numpy as np
+import tensorflow as tf
 from keras.losses import binary_crossentropy
 import keras.backend as K
 
