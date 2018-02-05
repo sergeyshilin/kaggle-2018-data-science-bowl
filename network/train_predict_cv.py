@@ -9,8 +9,8 @@ import pandas as pd
 
 import params
 from utils import get_data_train, get_data_test, get_best_history
-from utils import get_predictions_upsampled, get_submit_data
-from losses import bce_dice_loss, mean_iou
+from utils import get_predictions_upsampled, get_submit_data, probas_to_rles
+from losses import bce_dice_loss, mean_iou, bce_dice_loss_list, mean_iou_list
 
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
@@ -109,7 +109,7 @@ def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
         train_generator,
         steps_per_epoch=np.ceil(float(len(xtr)) / float(batch_size)),
         epochs=epochs,
-        verbose=2,
+        verbose=1,
         validation_data=val_generator,
         validation_steps=np.ceil(float(len(xcv)) / float(batch_size)),
         callbacks=get_callbacks()
@@ -124,9 +124,9 @@ def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
 
 
 def predict_with_tta(model, X_data, verbose=0):
-    predictions = np.zeros((tta_steps, len(X_data)))
+    predictions = np.zeros((tta_steps, X_data.shape[0], X_data.shape[1], X_data.shape[2]))
     test_probas = model.predict(X_data, batch_size=batch_size, verbose=verbose)
-    predictions[0] = test_probas.reshape(test_probas.shape[0])
+    predictions[0] = test_probas
 
     for i in range(1, tta_steps):
         test_probas = model.predict_generator(
@@ -134,7 +134,7 @@ def predict_with_tta(model, X_data, verbose=0):
             steps=np.ceil(float(len(X_data)) / float(batch_size)),
             verbose=verbose
         )
-        predictions[i] = test_probas.reshape(test_probas.shape[0])
+        predictions[i] = test_probas
 
     predictions = predictions.mean(axis=0)
     return predictions
@@ -144,7 +144,7 @@ def predict_with_tta(model, X_data, verbose=0):
 predictions = np.zeros((num_folds, len(X_test), model_input_size, model_input_size, 1))
 cv_labels = np.zeros((len(X_train), model_input_size, model_input_size, 1), dtype=np.uint8)
 cv_preds = np.zeros((len(X_train), model_input_size, model_input_size, 1), dtype=np.float32)
-tr_labels, tr_preds = [], []
+# tr_labels, tr_preds = [], []
 
 skf = KFold(n_splits=num_folds, random_state=random_seed, shuffle=True)
 for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
@@ -152,7 +152,7 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
     xtr, ytr = X_train[train_index], y_train[train_index]
     xcv, ycv = X_train[cv_index], y_train[cv_index]
 
-    tr_labels.extend(ytr)
+    # tr_labels.extend(ytr)
     cv_labels[cv_index] = ycv
 
     best_val_loss = 100000.0
@@ -176,22 +176,23 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
 
     # Measure train and validation quality
     print ('\nValidating accuracy on training data ...')
-    tr_preds.extend(predict_with_tta(best_model, xtr))
+    # tr_preds.extend(predict_with_tta(best_model, xtr))
     cv_preds[cv_index] = predict_with_tta(best_model, xcv)
 
     print ('\nPredicting test data with augmentation ...')
     fold_predictions = predict_with_tta(best_model, X_test, verbose=1)
     predictions[j] = fold_predictions
 
-tr_loss = bce_dice_loss(tr_labels, tr_preds)
-tr_acc = mean_iou(tr_labels, tr_preds)
-val_loss = bce_dice_loss(cv_labels, cv_preds)
-val_acc = mean_iou(cv_labels, cv_preds)
+# tr_loss = bce_dice_loss_list(tr_labels, tr_preds)
+# tr_acc = mean_iou_list(tr_labels, tr_preds)
+val_loss = bce_dice_loss_list(cv_labels, cv_preds)
+val_acc = mean_iou_list(cv_labels, cv_preds)
 
 print ()
 print ("Overall score: ")
-print ("train_loss: {:0.6f} - train_acc: {:0.4f} - val_loss: {:0.6f} - val_acc: {:0.4f}".format(
-    tr_loss, tr_acc, val_loss, val_acc))
+# print ("train_loss: {:0.6f} - train_acc: {:0.4f} - val_loss: {:0.6f} - val_acc: {:0.4f}".format(
+#     tr_loss, tr_acc, val_loss, val_acc))
+print ("val_loss: {:0.6f} - val_acc: {:0.4f}".format(val_loss, val_acc))
 print ()
 
 ## ========================= MAKE CV AND LB SUBMITS ========================= ##
@@ -212,7 +213,7 @@ new_test_ids, test_rles = get_submit_data(
 
 submission = pd.DataFrame()
 submission['ImageId'] = new_test_ids
-submission['EncodedPixels'] = pd.Series(rles).apply(lambda x: ' '.join(str(y) for y in x))
+submission['EncodedPixels'] = pd.Series(test_rles).apply(lambda x: ' '.join(str(y) for y in x))
 submission.to_csv('../submits/submission_{0:0>3}.csv'.format(last_submit_id), index=False)
 
 with open('submit_id', 'w') as submit_id:
