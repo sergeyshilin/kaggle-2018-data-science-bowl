@@ -42,7 +42,9 @@ def bce_dice_loss(y_true, y_pred):
 def bce_dice_loss_list(y_true, y_pred):
     loss = 0.
     for idx in range(len(y_true)):
-        loss += bce_dice_loss(y_true[idx], y_pred[idx])
+        y_true_tf = tf.convert_to_tensor(y_true[idx], np.float32)
+        y_pred_tf = tf.convert_to_tensor(y_pred[idx], np.float32)
+        loss += bce_dice_loss(y_true_tf, y_pred_tf)
     return loss / float(len(y_true))
 
 
