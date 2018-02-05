@@ -18,7 +18,9 @@ def mean_iou(y_true, y_pred):
 def mean_iou_list(y_true, y_pred):
     iou = 0.
     for idx in range(len(y_true)):
-        iou += mean_iou(y_true[idx], y_pred[idx])
+        y_true_tf = tf.convert_to_tensor(y_true[idx], np.float32)
+        y_pred_tf = tf.convert_to_tensor(y_pred[idx], np.float32)
+        iou += mean_iou(y_true_tf, y_pred_tf)
     return iou / float(len(y_true))
 
 
