@@ -15,6 +15,12 @@ def mean_iou(y_true, y_pred):
         prec.append(score)
     return K.mean(K.stack(prec))
 
+def mean_iou_list(y_true, y_pred):
+    iou = 0.
+    for idx in range(len(y_true)):
+        iou += mean_iou(y_true[idx], y_pred[idx])
+    return iou / float(len(y_true))
+
 
 def dice_coeff(y_true, y_pred):
     smooth = 1.
@@ -32,6 +38,12 @@ def dice_loss(y_true, y_pred):
 def bce_dice_loss(y_true, y_pred):
     loss = binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
     return loss
+
+def bce_dice_loss_list(y_true, y_pred):
+    loss = 0.
+    for idx in range(len(y_true)):
+        loss += bce_dice_loss(y_true[idx], y_pred[idx])
+    return loss / float(len(y_true))
 
 
 def weighted_dice_coeff(y_true, y_pred, weight):
