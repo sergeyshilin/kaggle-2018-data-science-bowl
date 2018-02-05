@@ -124,7 +124,7 @@ def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
 
 
 def predict_with_tta(model, X_data, verbose=0):
-    predictions = np.zeros((tta_steps, X_data.shape[0], X_data.shape[1], X_data.shape[2]))
+    predictions = np.zeros((tta_steps, X_data.shape[0], X_data.shape[1], X_data.shape[2], X_data.shape[3]))
     test_probas = model.predict(X_data, batch_size=batch_size, verbose=verbose)
     predictions[0] = test_probas
 
