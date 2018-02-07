@@ -59,11 +59,11 @@ def iou_metric(y_true_in, y_pred_in, print_table=False):
         print("AP\t-\t-\t-\t{:1.3f}".format(np.mean(prec)))
     return np.mean(prec)
 
-def iou_metric_batch(y_true_in, y_pred_in):
-    batch_size = y_true_in.shape[0]
+def iou_metric_batch(y_true, y_pred):
+    batch_size = y_true.shape[0]
     metric = []
     for batch in range(batch_size):
-        value = iou_metric(y_true_in[batch], y_pred_in[batch])
+        value = iou_metric(y_true[batch], y_pred[batch])
         metric.append(value)
     return np.array(np.mean(metric), dtype=np.float32)
 
@@ -96,11 +96,11 @@ def dice_loss(y_true, y_pred):
     return loss
 
 def bce_dice_loss_batch(y_true, y_pred):
-    batch_size = y_true_in.shape[0]
+    batch_size = y_true.shape[0]
     metric = []
     for batch in range(batch_size):
-        value = binary_crossentropy(y_true_in[batch], y_pred_in[batch]) + \
-            dice_loss(y_true_in[batch], y_pred_in[batch])
+        value = binary_crossentropy(y_true[batch], y_pred[batch]) + \
+            dice_loss(y_true[batch], y_pred[batch])
         metric.append(value)
     return np.array(np.mean(metric), dtype=np.float32)
 
