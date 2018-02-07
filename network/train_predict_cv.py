@@ -6,11 +6,12 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 
 import params
 from utils import get_data_train, get_data_test, get_best_history
 from utils import get_predictions_upsampled, get_submit_data, probas_to_rles
-from losses import bce_dice_loss, mean_iou, bce_dice_loss_list, mean_iou_list
+from losses import bce_dice_loss, mean_iou
 
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
@@ -185,8 +186,10 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
 
 # tr_loss = bce_dice_loss_list(tr_labels, tr_preds)
 # tr_acc = mean_iou_list(tr_labels, tr_preds)
-val_loss = bce_dice_loss_list(cv_labels, cv_preds)
-val_acc = mean_iou_list(cv_labels, cv_preds)
+sess = tf.Session()
+with tf.sess.as_default():
+    val_loss = bce_dice_loss(cv_labels, cv_preds)
+    val_acc = mean_iou(cv_labels, cv_preds)
 
 print ()
 print ("Overall score: ")
