@@ -187,7 +187,7 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
 # tr_loss = bce_dice_loss_list(tr_labels, tr_preds)
 # tr_acc = mean_iou_list(tr_labels, tr_preds)
 sess = tf.Session()
-with tf.sess.as_default():
+with sess.as_default():
     val_loss = bce_dice_loss_list(cv_labels, cv_preds)
     val_acc = mean_iou(cv_labels, cv_preds)
 
