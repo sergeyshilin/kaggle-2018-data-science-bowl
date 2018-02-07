@@ -95,18 +95,20 @@ def dice_loss(y_true, y_pred):
     loss = 1 - dice_coeff(y_true, y_pred)
     return loss
 
-def bce_dice_loss_batch(y_true, y_pred):
-    batch_size = y_true.shape[0]
-    metric = []
-    for batch in range(batch_size):
-        value = binary_crossentropy(y_true[batch], y_pred[batch]) + \
-            dice_loss(y_true[batch], y_pred[batch])
-        metric.append(value)
-    return np.array(np.mean(metric), dtype=np.float32)
-
 def bce_dice_loss(y_true, y_pred):
-    loss = tf.py_func(bce_dice_loss_batch, [y_true, y_pred], tf.float32)
+    loss = binary_crossentropy(y_true, y_pred) + dice_loss(y_true, y_pred)
     return loss
+
+def bce_dice_loss_list(y_true, y_pred):
+    sess = tf.Session()
+    losses = np.zeros((len(y_truea)), dtype=np.float32)
+    with sess.as_default():
+        for idx in range(len(y_true)):
+            y_true_f = K.flatten(tf.convert_to_tensor(y_true[idx], np.float32))
+            y_pred_f = K.flatten(tf.convert_to_tensor(y_pred[idx], np.float32))
+            loss = bce_dice_loss(y_true_f, y_pred_f).eval()
+            losses[idx] = loss
+    return losses.mean()
 
 
 def weighted_dice_coeff(y_true, y_pred, weight):
