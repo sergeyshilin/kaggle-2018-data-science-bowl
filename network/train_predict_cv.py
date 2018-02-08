@@ -11,7 +11,6 @@ import tensorflow as tf
 import params
 from utils import get_data_train, get_data_test, get_best_history
 from utils import get_predictions_upsampled, get_submit_data, probas_to_rles
-from losses import bce_dice_loss_list, mean_iou
 
 from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
@@ -116,12 +115,13 @@ def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
         callbacks=get_callbacks()
     )
 
-    best_epoch, loss, acc, val_loss, val_acc = get_best_history(hist.history, monitor='val_loss', mode='min')
+    history = get_best_history(hist.history, monitor='val_loss', mode='min')
+    best_epoch, loss, acc, val_loss, val_acc = history
     print ()
     print ("Best epoch: {}".format(best_epoch))
     print ("loss: {:0.6f} - acc: {:0.4f} - val_loss: {:0.6f} - val_acc: {:0.4f}".format(loss, acc, val_loss, val_acc))
     print ()
-    return val_loss
+    return history
 
 
 def predict_with_tta(model, X_data, verbose=0):
@@ -143,9 +143,7 @@ def predict_with_tta(model, X_data, verbose=0):
 
 ## ========================= RUN KERAS K-FOLD TRAINING ========================= ##
 predictions = np.zeros((num_folds, len(X_test), model_input_size, model_input_size, 1))
-cv_labels = np.zeros((len(X_train), model_input_size, model_input_size, 1), dtype=np.uint8)
-cv_preds = np.zeros((len(X_train), model_input_size, model_input_size, 1), dtype=np.float32)
-# tr_labels, tr_preds = [], []
+tr_losses, tr_accs, val_losses, val_accs = [], [], [], []
 
 skf = KFold(n_splits=num_folds, random_state=random_seed, shuffle=True)
 for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
@@ -153,10 +151,10 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
     xtr, ytr = X_train[train_index], y_train[train_index]
     xcv, ycv = X_train[cv_index], y_train[cv_index]
 
-    # tr_labels.extend(ytr)
-    cv_labels[cv_index] = ycv
-
-    best_val_loss = 100000.0
+    best_val_loss = np.inf
+    best_val_accuracy = -1 * np.inf
+    best_tr_loss = np.inf
+    best_tr_accuracy = -1 * np.inf
 
     for lr in params.learning_rates:
         model_lr = None
@@ -164,38 +162,34 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
         model_lr.load_weights(filepath=init_weights)
         K.set_value(model_lr.optimizer.lr, lr)
 
-        val_loss = train_and_evaluate_model(model_lr, xtr, ytr, xcv, ycv)
+        best_epoch, loss, acc, val_loss, val_acc = train_and_evaluate_model(model_lr, xtr, ytr, xcv, ycv)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            best_val_accuracy = val_acc
+            best_tr_loss = loss
+            best_tr_accuracy = acc
+
             model_lr.load_weights(filepath=best_weights_checkpoint)
             model_lr.save_weights(filepath=best_weights_path)
+
+    tr_losses.append(best_tr_loss)
+    tr_accs.append(best_tr_accuracy)
+    val_losses.append(best_val_loss)
+    val_accs.append(best_val_accuracy)
 
     # Load the best model over all learning rates
     best_model = params.model_factory(input_shape=X_train.shape[1:])
     best_model.load_weights(filepath=best_weights_path)
 
-    # Measure train and validation quality
-    print ('\nValidating accuracy on training data ...')
-    # tr_preds.extend(predict_with_tta(best_model, xtr))
-    cv_preds[cv_index] = predict_with_tta(best_model, xcv)
-
     print ('\nPredicting test data with augmentation ...')
     fold_predictions = predict_with_tta(best_model, X_test, verbose=1)
     predictions[j] = fold_predictions
 
-# tr_loss = bce_dice_loss_list(tr_labels, tr_preds)
-# tr_acc = mean_iou_list(tr_labels, tr_preds)
-sess = tf.Session()
-with sess.as_default():
-    val_loss = bce_dice_loss_list(cv_labels, cv_preds)
-    val_acc = mean_iou(cv_labels, cv_preds)
-
 print ()
 print ("Overall score: ")
-# print ("train_loss: {:0.6f} - train_acc: {:0.4f} - val_loss: {:0.6f} - val_acc: {:0.4f}".format(
-#     tr_loss, tr_acc, val_loss, val_acc))
-print ("val_loss: {:0.6f} - val_acc: {:0.4f}".format(val_loss, val_acc))
+print ("train_loss: {:0.6f} - train_acc: {:0.4f} - val_loss: {:0.6f} - val_acc: {:0.4f}".format(
+    np.mean(tr_loss), np.mean(tr_acc), np.mean(val_loss), np.mean(val_acc)))
 print ()
 
 ## ========================= MAKE CV AND LB SUBMITS ========================= ##
@@ -203,11 +197,6 @@ with open('submit_id', 'r') as submit_id:
     last_submit_id = int(submit_id.read())
 
 last_submit_id += 1
-
-# submission_cv = pd.DataFrame()
-# submission_cv['preds'] = get_preds_upsampled(cv_preds, train_sizes)
-# submission_cv['is_iceberg'] = cv_labels
-# submission_cv.to_csv('../submits_cv/submission_cv_{0:0>3}.csv'.format(last_submit_id), index=False)
 
 new_test_ids, test_rles = get_submit_data(
     get_predictions_upsampled(predictions.mean(axis=0), test_sizes),
