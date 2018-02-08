@@ -36,8 +36,8 @@ def iou_metric(y_true_in, y_pred_in, print_table=False):
     def precision_at(threshold, iou):
         matches = iou > threshold
         true_positives = np.sum(matches, axis=1) == 1   # Correct objects
-        false_positives = np.sum(matches, axis=0) == 0  # Missed objects
-        false_negatives = np.sum(matches, axis=1) == 0  # Extra objects
+        false_positives = np.sum(matches, axis=0) == 0  # Extra objects
+        false_negatives = np.sum(matches, axis=1) == 0  # Missed objects
         tp, fp, fn = np.sum(true_positives), np.sum(false_positives), np.sum(false_negatives)
         return tp, fp, fn
 
@@ -101,7 +101,7 @@ def bce_dice_loss(y_true, y_pred):
 
 def bce_dice_loss_list(y_true, y_pred):
     sess = tf.Session()
-    losses = np.zeros((len(y_truea)), dtype=np.float32)
+    losses = np.zeros((len(y_true)), dtype=np.float32)
     with sess.as_default():
         for idx in range(len(y_true)):
             y_true_f = K.flatten(tf.convert_to_tensor(y_true[idx], np.float32))
