@@ -189,7 +189,7 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
 print ()
 print ("Overall score: ")
 print ("train_loss: {:0.6f} - train_acc: {:0.4f} - val_loss: {:0.6f} - val_acc: {:0.4f}".format(
-    np.mean(tr_loss), np.mean(tr_acc), np.mean(val_loss), np.mean(val_acc)))
+    np.mean(tr_losses), np.mean(tr_accs), np.mean(val_losses), np.mean(val_accs)))
 print ()
 
 ## ========================= MAKE CV AND LB SUBMITS ========================= ##
