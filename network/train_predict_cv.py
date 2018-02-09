@@ -54,8 +54,8 @@ X_test, test_ids, test_sizes = get_data_test('../data/test/', model_input_size)
 
 def get_callbacks():
     return [
-        EarlyStopping(monitor='val_loss', patience=40, verbose=1, min_delta=1e-4, mode='min'),
-        ReduceLROnPlateau(monitor='val_loss', patience=20, factor=0.1, 
+        EarlyStopping(monitor='val_loss', patience=20, verbose=1, min_delta=1e-4, mode='min'),
+        ReduceLROnPlateau(monitor='val_loss', patience=10, factor=0.1, 
             verbose=1, epsilon=1e-4, mode='min'),
         ModelCheckpoint(monitor='val_loss', filepath=best_weights_checkpoint, 
             save_best_only=True, save_weights_only=True, mode='min')
