@@ -92,21 +92,12 @@ def get_best_history(history, monitor='val_loss', mode='min'):
     return best_iteration + 1, loss, acc, val_loss, val_acc
 
 
-def resize_data(data, size):
-    data_upscaled = np.zeros((data.shape[0], size[0], size[1], size[2]), dtype=data.dtype)
-
-    for i in range(len(data)):
-        data_upscaled[i] = cv2.resize(data[i], (size[0], size[1]))
-
-    return data_upscaled[:]
-
-
 def get_predictions_upsampled(predictions, original_size):
     preds_test_upsampled = []
 
     for i in range(len(predictions)):
         preds_test_upsampled.append(
-            cv2.resize(predictions[i], (original_size[i][1], original_size[i][0]))
+            cv2.resize(np.squeeze(predictions[i]), (original_size[i][0], original_size[i][1]))
         )
 
     return preds_test_upsampled

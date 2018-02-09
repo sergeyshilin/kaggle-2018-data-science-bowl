@@ -44,6 +44,7 @@ aug_height_shift = params.aug_height_shift
 aug_channel_shift = params.aug_channel_shift
 aug_shear = params.aug_shear
 aug_zoom = params.aug_zoom
+aug_fill_mode = params.aug_fill_mode
 ### LOAD PARAMETERS
 
 
@@ -69,26 +70,26 @@ datagen_args = dict(
     height_shift_range=aug_height_shift,
     channel_shift_range=aug_channel_shift,
     shear_range=aug_shear,
-    zoom_range=aug_zoom
+    zoom_range=aug_zoom,
+    fill_mode=aug_fill_mode
 )
 
 
 def generator(xtr, xval, ytr, yval):
     image_datagen = ImageDataGenerator(**datagen_args)
     mask_datagen = ImageDataGenerator(**datagen_args)
-    image_datagen.fit(xtr, seed=random_seed)
-    mask_datagen.fit(ytr, seed=random_seed)
-    image_generator = image_datagen.flow(xtr, batch_size=batch_size, seed=random_seed)
-    mask_generator = mask_datagen.flow(ytr, batch_size=batch_size, seed=random_seed)
+    image_datagen.fit(xtr, augment=True, seed=random_seed)
+    mask_datagen.fit(ytr, augment=True, seed=random_seed)
+    image_generator = image_datagen.flow(xtr, batch_size=batch_size, shuffle=True, seed=random_seed)
+    mask_generator = mask_datagen.flow(ytr, batch_size=batch_size, shuffle=True, seed=random_seed)
     train_generator = zip(image_generator, mask_generator)
 
-    val_gen_args = dict()
-    image_datagen_val = ImageDataGenerator(**val_gen_args)
-    mask_datagen_val = ImageDataGenerator(**val_gen_args)
-    image_datagen_val.fit(xval, seed=random_seed)
-    mask_datagen_val.fit(yval, seed=random_seed)
-    image_generator_val = image_datagen_val.flow(xval, batch_size=batch_size, seed=random_seed)
-    mask_generator_val = mask_datagen_val.flow(yval, batch_size=batch_size, seed=random_seed)
+    image_datagen_val = ImageDataGenerator() # no augmentation
+    mask_datagen_val = ImageDataGenerator() # no augmentation
+    image_datagen_val.fit(xval, augment=True, seed=random_seed)
+    mask_datagen_val.fit(yval, augment=True, seed=random_seed)
+    image_generator_val = image_datagen_val.flow(xval, batch_size=batch_size, shuffle=True, seed=random_seed)
+    mask_generator_val = mask_datagen_val.flow(yval, batch_size=batch_size, shuffle=True, seed=random_seed)
     val_generator = zip(image_generator_val, mask_generator_val)
 
     return train_generator, val_generator
