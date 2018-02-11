@@ -15,17 +15,17 @@ def get_data_train(data_path, img_size):
     train_ids = np.asarray(next(os.walk(data_path))[1])
     sizes_train = []
 
-    X_train = np.zeros((len(train_ids), img_size, img_size, 3), dtype=np.uint8)
-    Y_train = np.zeros((len(train_ids), img_size, img_size, 1), dtype=np.uint8)
+    X_train = np.zeros((len(train_ids), img_size, img_size, 3), dtype=np.float32)
+    Y_train = np.zeros((len(train_ids), img_size, img_size, 1), dtype=np.float32)
 
     for i, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
         path = data_path + id_
-        img = cv2.imread(path + '/images/' + id_ + '.png')
+        img = cv2.imread(path + '/images/' + id_ + '.png').astype(np.float32)
         sizes_train.append([img.shape[0], img.shape[1]])
         img = resize(img, (img_size, img_size), mode='constant', preserve_range=True)
         X_train[i] = img
-        mask = np.zeros((img_size, img_size, 1), dtype=np.bool)
 
+        mask = np.zeros((img_size, img_size, 1), dtype=np.float32)
         for mask_file in next(os.walk(path + '/masks/'))[2]:
             mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
             mask_ = np.expand_dims(
@@ -35,23 +35,26 @@ def get_data_train(data_path, img_size):
             mask = np.maximum(mask, mask_)
 
         Y_train[i] = mask
-    return X_train / 255.0, Y_train / 255.0, train_ids, sizes_train
+
+    X_train = X_train / 255.0
+    Y_train = Y_train / 255.0
+    return X_train, Y_train, train_ids, sizes_train
 
 
 def get_data_test(data_path, img_size):
     test_ids = np.asarray(next(os.walk(data_path))[1])
-    X_test = np.zeros((len(test_ids), img_size, img_size, 3), dtype=np.uint8)
+    X_test = np.zeros((len(test_ids), img_size, img_size, 3), dtype=np.float32)
     sizes_test = []
 
     for i, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
         path = data_path + id_
-        img = cv2.imread(path + '/images/' + id_ + '.png')
+        img = cv2.imread(path + '/images/' + id_ + '.png').astype(np.float32)
         sizes_test.append([img.shape[0], img.shape[1]])
         img = resize(img, (img_size, img_size), mode='constant', preserve_range=True)
         X_test[i] = img
 
-    return X_test / 255.0, test_ids, sizes_test
-
+    X_test = X_test / 255.0
+    return X_test, test_ids, sizes_test
 
 ## ========= Data Preprocessing namespace ========= ##
 class DataPreprocessing:
