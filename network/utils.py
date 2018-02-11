@@ -1,10 +1,12 @@
 import os
 import numpy as np
+from tqdm import tqdm
 import cv2
 from scipy.signal import correlate2d, convolve2d
 from keras.preprocessing import image
 from sklearn.preprocessing import StandardScaler
 from skimage.morphology import label
+from skimage.transform import resize
 
 __all__ = ['DataPreprocessing']
 
@@ -14,24 +16,26 @@ def get_data_train(data_path, img_size):
     sizes_train = []
 
     X_train = np.zeros((len(train_ids), img_size, img_size, 3), dtype=np.uint8)
-    Y_train = np.zeros((len(train_ids), img_size, img_size, 1), dtype=np.bool)
+    Y_train = np.zeros((len(train_ids), img_size, img_size, 1), dtype=np.uint8)
 
-    for i, id_ in enumerate(train_ids):
+    for i, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
         path = data_path + id_
         img = cv2.imread(path + '/images/' + id_ + '.png')
         sizes_train.append([img.shape[0], img.shape[1]])
-        img = cv2.resize(img, (img_size, img_size))
+        img = resize(img, (img_size, img_size), mode='constant', preserve_range=True)
         X_train[i] = img
         mask = np.zeros((img_size, img_size, 1), dtype=np.bool)
 
         for mask_file in next(os.walk(path + '/masks/'))[2]:
             mask_ = cv2.imread(path + '/masks/' + mask_file, 0)
-            mask_ = cv2.resize(mask_, (img_size, img_size))
-            mask_ = mask_[:, :, np.newaxis]
+            mask_ = np.expand_dims(
+                resize(mask_, (img_size, img_size), mode='constant', preserve_range=True),
+                axis=-1
+            )
             mask = np.maximum(mask, mask_)
 
         Y_train[i] = mask
-    return X_train, Y_train, train_ids, sizes_train
+    return X_train / 255.0, Y_train / 255.0, train_ids, sizes_train
 
 
 def get_data_test(data_path, img_size):
@@ -39,14 +43,14 @@ def get_data_test(data_path, img_size):
     X_test = np.zeros((len(test_ids), img_size, img_size, 3), dtype=np.uint8)
     sizes_test = []
 
-    for i, id_ in enumerate(test_ids):
+    for i, id_ in tqdm(enumerate(test_ids), total=len(test_ids)):
         path = data_path + id_
         img = cv2.imread(path + '/images/' + id_ + '.png')
         sizes_test.append([img.shape[0], img.shape[1]])
-        img = cv2.resize(img, (img_size, img_size))
+        img = resize(img, (img_size, img_size), mode='constant', preserve_range=True)
         X_test[i] = img
 
-    return X_test, test_ids, sizes_test
+    return X_test / 255.0, test_ids, sizes_test
 
 
 ## ========= Data Preprocessing namespace ========= ##
