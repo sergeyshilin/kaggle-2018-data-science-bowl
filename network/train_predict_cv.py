@@ -165,7 +165,7 @@ new_test_ids, test_rles = get_submit_data(
 
 submission = pd.DataFrame()
 submission['ImageId'] = new_test_ids
-submission['EncodedPixels'] = pd.Series(test_rles).apply(lambda x: ' '.join(str(y) for y in x))
+submission['EncodedPixels'] = pd.Series(test_rles)
 submission.to_csv('../submits/submission_{0:0>3}.csv'.format(last_submit_id), index=False)
 
 with open('submit_id', 'w') as submit_id:
