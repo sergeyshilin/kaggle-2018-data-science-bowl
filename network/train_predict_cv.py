@@ -9,6 +9,9 @@ import pandas as pd
 import tensorflow as tf
 
 import params
+from augmentation import deterministic_augmentation
+import generators
+
 from utils import get_data_train, get_data_test, get_best_history
 from utils import get_predictions_upsampled, get_submit_data, probas_to_rles
 
@@ -16,41 +19,28 @@ from sklearn.model_selection import train_test_split
 from sklearn.model_selection import KFold
 from sklearn.metrics import log_loss, accuracy_score
 from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
-from keras.preprocessing.image import ImageDataGenerator
 from keras import backend as K
 
-
 ### LOAD PARAMETERS
+train_val_generator = generators.shilin_train_val_generator
+#
 epochs = params.max_epochs
 batch_size = params.batch_size
 best_weights_path = params.best_weights_path
 best_weights_checkpoint = params.best_weights_checkpoint
 best_model_path = params.best_model_path
 init_weights = params.init_weights_path
-random_seed = params.seed
 num_folds = params.num_folds
 tta_steps = params.tta_steps
 model_input_size = params.model_input_size
 transform_data = params.data_adapt
 pseudolabeling = params.pseudolabeling
-
-
-## Augmentation parameters
-aug_horizontal_flip = params.aug_horizontal_flip
-aug_vertical_flip = params.aug_vertical_flip
-aug_rotation = params.aug_rotation
-aug_width_shift = params.aug_width_shift
-aug_height_shift = params.aug_height_shift
-aug_channel_shift = params.aug_channel_shift
-aug_shear = params.aug_shear
-aug_zoom = params.aug_zoom
-aug_fill_mode = params.aug_fill_mode
+random_seed = params.seed
 ### LOAD PARAMETERS
 
 
 X_train, y_train, train_ids, train_sizes = get_data_train('../data/train/', model_input_size)
 X_test, test_ids, test_sizes = get_data_test('../data/test/', model_input_size)
-
 
 def get_callbacks():
     return [
@@ -61,40 +51,6 @@ def get_callbacks():
             save_best_only=True, save_weights_only=True, mode='min')
     ]
 
-
-datagen_args = dict(
-    horizontal_flip=aug_horizontal_flip,
-    vertical_flip=aug_vertical_flip,
-    rotation_range=aug_rotation,
-    width_shift_range=aug_width_shift,
-    height_shift_range=aug_height_shift,
-    channel_shift_range=aug_channel_shift,
-    shear_range=aug_shear,
-    zoom_range=aug_zoom,
-    fill_mode=aug_fill_mode
-)
-
-
-def generator(xtr, xval, ytr, yval):
-    image_datagen = ImageDataGenerator(**datagen_args)
-    mask_datagen = ImageDataGenerator(**datagen_args)
-    image_datagen.fit(xtr, augment=True, seed=random_seed)
-    mask_datagen.fit(ytr, augment=True, seed=random_seed)
-    image_generator = image_datagen.flow(xtr, batch_size=batch_size, shuffle=True, seed=random_seed)
-    mask_generator = mask_datagen.flow(ytr, batch_size=batch_size, shuffle=True, seed=random_seed)
-    train_generator = zip(image_generator, mask_generator)
-
-    image_datagen_val = ImageDataGenerator() # no augmentation
-    mask_datagen_val = ImageDataGenerator() # no augmentation
-    image_datagen_val.fit(xval, augment=True, seed=random_seed)
-    mask_datagen_val.fit(yval, augment=True, seed=random_seed)
-    image_generator_val = image_datagen_val.flow(xval, batch_size=batch_size, shuffle=True, seed=random_seed)
-    mask_generator_val = mask_datagen_val.flow(yval, batch_size=batch_size, shuffle=True, seed=random_seed)
-    val_generator = zip(image_generator_val, mask_generator_val)
-
-    return train_generator, val_generator
-
-
 model_info = params.model_factory(input_shape=X_train.shape[1:])
 model_info.summary()
 model_info.save_weights(filepath=init_weights)
@@ -104,7 +60,7 @@ with open(best_model_path, "w") as json_file:
 
 
 def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
-    train_generator, val_generator = generator(xtr, xcv, ytr, ycv)
+    train_generator, val_generator = train_val_generator(xtr, xcv, ytr, ycv)
 
     hist = model.fit_generator(
         train_generator,
@@ -127,16 +83,19 @@ def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
 
 def predict_with_tta(model, X_data, verbose=0):
     predictions = np.zeros((tta_steps, X_data.shape[0], X_data.shape[1], X_data.shape[2], 1))
-    test_probas = model.predict(X_data, batch_size=batch_size, verbose=verbose)
-    predictions[0] = test_probas
+    
+    for image_id in range(X_data.shape[0]):
+        test_probas = model.predict(X_data[np.newaxis, image_id, ...], batch_size=batch_size, verbose=verbose)
+        predictions[0, image_id, ...] = test_probas
 
-    for i in range(1, tta_steps):
-        test_probas = model.predict_generator(
-            get_data_generator_test(datagen, X_data, M_data, batch_size=batch_size),
-            steps=np.ceil(float(len(X_data)) / float(batch_size)),
-            verbose=verbose
-        )
-        predictions[i] = test_probas
+        for i in range(1, tta_steps):
+            # perform augmentation and remember parameters
+            image_aug, aug_params = deterministic_augmentation(X_data[image_id, ...], image = True) 
+            # predict on augmented image
+            test_probas = model.predict(image_aug[np.newaxis, ...], batch_size=batch_size, verbose=verbose)
+            # perform inverse transform
+            test_probas = deterministic_augmentation(test_probas[0], image = False, aug_params = aug_params)[0]
+            predictions[i, image_id, ...] = test_probas
 
     predictions = predictions.mean(axis=0)
     return predictions
@@ -184,7 +143,7 @@ for j, (train_index, cv_index) in enumerate(skf.split(X_train, y_train)):
     best_model.load_weights(filepath=best_weights_path)
 
     print ('\nPredicting test data with augmentation ...')
-    fold_predictions = predict_with_tta(best_model, X_test, verbose=1)
+    fold_predictions = predict_with_tta(best_model, X_test, verbose=0)
     predictions[j] = fold_predictions
 
 print ()
