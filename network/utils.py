@@ -104,7 +104,7 @@ def get_predictions_upsampled(predictions, original_size):
 
     for i in range(len(predictions)):
         preds_test_upsampled.append(
-            cv2.resize(np.squeeze(predictions[i]), (original_size[i][0], original_size[i][1]))
+            resize(np.squeeze(predictions[i]), (original_size[i][0], original_size[i][1]), mode='constant', preserve_range=True)
         )
 
     return preds_test_upsampled
