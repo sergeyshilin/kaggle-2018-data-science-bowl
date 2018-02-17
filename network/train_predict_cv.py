@@ -10,6 +10,7 @@ import tensorflow as tf
 
 import params
 from augmentation import deterministic_augmentation
+from tqdm import tqdm
 import generators
 
 from utils import get_data_train, get_data_test, get_best_history
@@ -84,7 +85,7 @@ def train_and_evaluate_model(model, xtr, ytr, xcv, ycv):
 def predict_with_tta(model, X_data, verbose=0):
     predictions = np.zeros((tta_steps, X_data.shape[0], X_data.shape[1], X_data.shape[2], 1))
     
-    for image_id in range(X_data.shape[0]):
+    for image_id in tqdm(range(X_data.shape[0])):
         test_probas = model.predict(X_data[np.newaxis, image_id, ...], batch_size=batch_size, verbose=verbose)
         predictions[0, image_id, ...] = test_probas
 
