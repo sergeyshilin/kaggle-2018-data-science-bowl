@@ -5,6 +5,7 @@
 data/**/
 preview/
 preview_test/
+Mask_RCNN/
 .DS_Store
 
 # Byte-compiled / optimized / DLL files
