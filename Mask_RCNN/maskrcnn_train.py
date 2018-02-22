@@ -10,6 +10,8 @@ import time
 import numpy as np
 
 import model as modellib
+import train_config
+from train_config import BowlDataset
 from model import log
 
 from train_config import BowlConfig

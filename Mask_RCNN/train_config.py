@@ -11,7 +11,7 @@ import utils
 ## Global vars
 ##
 
-init_with = "last"  # `imagenet`, `coco`, or `last`
+init_with = "coco"  # `imagenet`, `coco`, or `last`
 layers_to_train = "all" # `heads` or `all`
 epochs = 25
 validation_split = 0.15
@@ -27,17 +27,17 @@ class BowlConfig(Config):
     GPU_COUNT = 1 
     IMAGES_PER_GPU = 1 
     NUM_CLASSES = 1 + 1 
-    IMAGE_MIN_DIM = 256 
-    IMAGE_MAX_DIM = 512 
+    IMAGE_MIN_DIM = 128 
+    IMAGE_MAX_DIM = 256 
     RPN_ANCHOR_SCALES = (4, 8, 16, 32, 64) 
     TRAIN_ROIS_PER_IMAGE = 500 
     STEPS_PER_EPOCH = 600 // (IMAGES_PER_GPU * GPU_COUNT) 
     VALIDATION_STEPS = 70 // (IMAGES_PER_GPU * GPU_COUNT) 
     MEAN_PIXEL = [0, 0, 0] 
     LEARNING_RATE = 0.001 
-    USE_MINI_MASK = True 
+    USE_MINI_MASK = True
     MAX_GT_INSTANCES = 500
-
+    DETECTION_MAX_INSTANCES = 300
 
 class BowlDataset(utils.Dataset):
     """Generates the shapes synthetic dataset. The dataset consists of simple
@@ -73,8 +73,6 @@ class BowlDataset(utils.Dataset):
         image = skimage.io.imread(info['path'])[:,:,:3]
         # we only need to resize in case we train
         # if we test, we will resize in get_image_gt, but will keep the previous shape
-        if train:
-            image = resize(image, (info['height'], info['width']), mode='constant', preserve_range=True)
         # If grayscale. Convert to RGB for consistency.
         if image.ndim != 3:
             image = skimage.color.gray2rgb(image)
@@ -89,14 +87,12 @@ class BowlDataset(utils.Dataset):
         number_of_masks = len(masks_ids)
         
         info = self.image_info[image_id]
-        mask = np.zeros((info['height'], info['width'], number_of_masks), dtype=np.uint8)
+        ref_mask = skimage.io.imread(masks_path + '/' + masks_ids[0])
+        mask = np.zeros((ref_mask.shape[0], ref_mask.shape[1], number_of_masks), dtype=np.uint8)
         for i, mask_id in enumerate(masks_ids):
             single_mask_path = masks_path + '/' + mask_id
             mask_ = skimage.io.imread(single_mask_path)
-            mask_ = np.expand_dims(resize(
-                    mask_, (info['height'], info['width']),
-                    mode='constant', preserve_range=True
-                ),
+            mask_ = np.expand_dims(mask_,
                 axis=-1
             )
             mask[:, :, i:i+1] = mask_
