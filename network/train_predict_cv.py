@@ -40,8 +40,8 @@ random_seed = params.seed
 ### LOAD PARAMETERS
 
 
-X_train, y_train, train_ids, train_sizes = get_data_train('../data/train/', model_input_size)
-X_test, test_ids, test_sizes = get_data_test('../data/test/', model_input_size)
+X_train, y_train, train_ids, train_sizes = get_data_train('../data/stage1_train/', model_input_size)
+X_test, test_ids, test_sizes = get_data_test('../data/stage1_test/', model_input_size)
 
 def get_callbacks():
     return [
